@@ -1,6 +1,7 @@
 # sudo apt-get install unzip
 # pip install transformers wandb tiktoken
-# unzip /workspace/dataset-ref-20k.zip -d /workspace/dataset/
+# unzip /workspace/dataset-lin.zip -d /workspace/dataset/
+# unzip /workspace/dataset-ref.zip -d /workspace/dataset/
 # torchrun --standalone --nproc_per_node=2 train-gpt2.py
 # python train-gpt2.py
 
@@ -18,7 +19,7 @@ import wandb
 from torch.nn import functional as F
 
 from hellaswag import get_most_likely_row, iterate_examples, render_example
-from model import GPT, GPTConfig
+from model import GPT, get_model_config
 from tokenizer import LinearTokenizer
 
 ENABLE_WANDB = True
@@ -26,17 +27,18 @@ LINEAR_TOKENIZER = False
 
 data_root = "dataset/content/data/"
 
-total_batch_size = 262144 # 262144 # 524288 # 2**19, ~0.5M, in number of tokens
+total_batch_size = 524288 # 262144 # 524288 # 2**19, ~0.5M, in number of tokens
 B = 4 # 64
 T = 1024 # sequence length
 
 max_lr = 6e-4
 min_lr = max_lr * 0.1
-warmup_steps = 500 # 715
-max_steps = 5000 # 19073 steps is ~1 epoch, if data is 10B tokens and batch size 0.5M tokens
+warmup_steps = 715 # 715
+max_steps = 19073 # 19073 steps is ~1 epoch, if data is 10B tokens and batch size 0.5M tokens
 
+model_type = "gpt2"
+load_pretrained = False
 checkpoint_path = None
-load_pretrained = None
 
 tokenizer_name = 'lin' if LINEAR_TOKENIZER else 'bpe'
 project_name = f"{tokenizer_name}{'-full' if max_steps >= 10000 else ''}"
@@ -155,10 +157,11 @@ val_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_w
 
 torch.set_float32_matmul_precision('high')
 
+config = get_model_config(model_type, vocab_size=50304)
 # create model
-model = GPT(GPTConfig(vocab_size=50304))
+model = GPT(config)
 if load_pretrained:
-    model = GPT.from_pretrained(load_pretrained) # or init from OpenAI GPT-2
+    model = GPT.from_pretrained(model_type) # or init from OpenAI GPT-2
 
 start_step = 0
 if checkpoint_path is not None:
@@ -211,6 +214,7 @@ if master_process:
         name=project_name,
         config={
             "tokenizer": tokenizer_name,
+            "model_type": model_type,
             "max_lr": max_lr,
             "min_lr": min_lr,
             "warmup_steps": warmup_steps,
@@ -282,7 +286,7 @@ for step in range(start_step, max_steps):
             # get the logits
             with torch.no_grad():
                 with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
-                    logits, _ = model(tokens)
+                    logits, _, __ = model(tokens)
                 pred_norm = get_most_likely_row(tokens, mask, logits)
             num_total += 1
             num_correct_norm += int(pred_norm == label)

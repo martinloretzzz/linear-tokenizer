@@ -8,6 +8,19 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
+def get_model_config(model_type, vocab_size=50257):
+    assert model_type in {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
+    # n_layer, n_head and n_embd are determined from model_type
+    config_args = {
+        'gpt2':         dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
+        'gpt2-medium':  dict(n_layer=24, n_head=16, n_embd=1024), # 350M params
+        'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M params
+        'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M params
+    }[model_type]
+    config_args['vocab_size'] = vocab_size # always 50257 for GPT model checkpoints
+    config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
+    return GPTConfig(**config_args)
+
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -131,21 +144,11 @@ class GPT(nn.Module):
     @classmethod
     def from_pretrained(cls, model_type):
         """Loads pretrained GPT-2 model weights from huggingface"""
-        assert model_type in {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
         from transformers import GPT2LMHeadModel
         print("loading weights from pretrained gpt: %s" % model_type)
 
-        # n_layer, n_head and n_embd are determined from model_type
-        config_args = {
-            'gpt2':         dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
-            'gpt2-medium':  dict(n_layer=24, n_head=16, n_embd=1024), # 350M params
-            'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M params
-            'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M params
-        }[model_type]
-        config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
-        config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
+        config = get_model_config(model_type)
         # create a from-scratch initialized minGPT model
-        config = GPTConfig(**config_args)
         model = GPT(config)
         sd = model.state_dict()
         sd_keys = sd.keys()
