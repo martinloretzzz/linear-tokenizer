@@ -1,7 +1,7 @@
 # sudo apt-get install unzip
 # pip install transformers wandb tiktoken
-# unzip /workspace/dataset-lin.zip -d /workspace/dataset/
-# unzip /workspace/dataset-ref.zip -d /workspace/dataset/
+# unzip /workspace/dataset-lin.zip -d /workspace/dataset-lin/
+# unzip /workspace/dataset-bpe.zip -d /workspace/dataset-bpe/
 # torchrun --standalone --nproc_per_node=2 train-gpt2.py
 # python train-gpt2.py
 
@@ -23,11 +23,12 @@ from model import GPT, get_model_config
 from tokenizer import LinearTokenizer
 
 ENABLE_WANDB = True
-LINEAR_TOKENIZER = False
+LINEAR_TOKENIZER = True
 
-data_root = "dataset/content/data/"
+dataset_path = "dataset-lin" if LINEAR_TOKENIZER else "dataset-bpe"
+data_root = dataset_path + "/content/data/"
 
-total_batch_size = 524288 # 262144 # 524288 # 2**19, ~0.5M, in number of tokens
+total_batch_size = 262144 # 262144 # 524288 # 2**19, ~0.5M, in number of tokens
 B = 4 # 64
 T = 1024 # sequence length
 
@@ -36,18 +37,18 @@ min_lr = max_lr * 0.1
 warmup_steps = 715 # 715
 max_steps = 19073 # 19073 steps is ~1 epoch, if data is 10B tokens and batch size 0.5M tokens
 
-model_type = "gpt2"
+model_type = "gpt2-medium"
 load_pretrained = False
 checkpoint_path = None
 
 tokenizer_name = 'lin' if LINEAR_TOKENIZER else 'bpe'
-project_name = f"{tokenizer_name}{'-full' if max_steps >= 10000 else ''}"
+project_name = f"{tokenizer_name}{'-md' if model_type == 'gpt2-medium' else ''}{'-full' if max_steps >= 10000 else ''}"
 
 
 if LINEAR_TOKENIZER:
-    with open('./vocab-gpt2-tt.json', 'r', encoding='utf-8') as f:
+    with open('./vocab.json', 'r', encoding='utf-8') as f:
         vocab = json.load(f)
-    tokenizer = LinearTokenizer(vocab, space_expand_vocab=False)
+    tokenizer = LinearTokenizer(vocab)
 else:
     tokenizer = tiktoken.get_encoding("gpt2")
 
@@ -215,6 +216,7 @@ if master_process:
         config={
             "tokenizer": tokenizer_name,
             "model_type": model_type,
+            "dataset": dataset_path,
             "max_lr": max_lr,
             "min_lr": min_lr,
             "warmup_steps": warmup_steps,
