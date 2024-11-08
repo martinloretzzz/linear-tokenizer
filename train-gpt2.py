@@ -28,8 +28,8 @@ LINEAR_TOKENIZER = True
 dataset_path = "dataset-lin" if LINEAR_TOKENIZER else "dataset-bpe"
 data_root = dataset_path + "/content/data/"
 
-total_batch_size = 262144 # 262144 # 524288 # 2**19, ~0.5M, in number of tokens
-B = 4 # 64
+total_batch_size = 524288 # 262144 # 524288 # 2**19, ~0.5M, in number of tokens
+B = 8 # 64
 T = 1024 # sequence length
 
 max_lr = 6e-4
@@ -37,7 +37,7 @@ min_lr = max_lr * 0.1
 warmup_steps = 715 # 715
 max_steps = 19073 # 19073 steps is ~1 epoch, if data is 10B tokens and batch size 0.5M tokens
 
-model_type = "gpt2-medium"
+model_type = "gpt2"
 load_pretrained = False
 checkpoint_path = None
 
