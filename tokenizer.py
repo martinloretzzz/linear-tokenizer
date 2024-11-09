@@ -1,6 +1,3 @@
-import regex as re
-
-
 class TrieNode:
     def __init__(self):
         self.id = None
@@ -59,39 +56,27 @@ def bytes_to_unicode():
 
 class LinearTokenizer():
     def __init__(self, vocab):
-        self.byte_encoder = bytes_to_unicode()
-        self.byte_decoder = {v:k for k, v in self.byte_encoder.items()}
+        byte_encoder = bytes_to_unicode()
+        byte_decoder = {v:k for k, v in byte_encoder.items()}
 
         self.vocab_encode = vocab
-        self.vocab_decode = {v:k for k,v in vocab.items()}
+        self.vocab_decode = {}
 
         self.trie = Trie()
         for token, token_id in self.vocab_encode.items():
-            self.trie.insert(token, token_id)
-
-        # https://github.com/openai/tiktoken/blob/main/tiktoken_ext/openai_public.py
-        self.pattern = re.compile(r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}++| ?\p{N}++| ?[^\s\p{L}\p{N}]++|\s++$|\s+(?!\S)|\s""")
-
+            token_bytes = bytes([byte_decoder[c] for c in token])
+            self.vocab_decode[token_id] = token_bytes
+            self.trie.insert(token_bytes, token_id)
 
     def encode(self, text, return_token_tuple=False):
         # TODO special handling of <|endoftext|> token
-        pretokens = self.pattern.findall(text)
-        pretokens = [''.join(self.byte_encoder[b] for b in pretoken.encode('utf-8')) for pretoken in pretokens]
-        ids = []
-        for pretoken in pretokens:
-            if pretoken in self.vocab_encode:
-                ids.append(self.vocab_encode[pretoken])
-            else:
-                ids.extend(self.trie.encode(pretoken))
-
-        if return_token_tuple:
-            return (ids, [self.vocab_decode[id] for id in ids])
-        return ids
+        ids = self.trie.encode(text.encode('utf-8'))
+        return (ids, [self.vocab_decode[id] for id in ids]) if return_token_tuple else ids
 
     def decode(self, ids):
-        out = ""
+        out = bytes()
         for id in ids:
             if not id in self.vocab_decode:
                 raise Exception(f"Error decoding {id}")
             out += self.vocab_decode[id]
-        return bytearray([self.byte_decoder[c] for c in out]).decode('utf-8', errors="replace")
+        return out.decode('utf-8', errors="replace")
